@@ -38,6 +38,7 @@ const Layout = ({ children }) => {
     { path: "/ano", label: "Ano", icon: TrendingUp },
     { path: "/categorias", label: "Categorias", icon: PieChart },
     { path: "/comparacao", label: "Comparação", icon: BarChart3 },
+    { path: "/timeline", label: "Timeline", icon: Calendar },
   ];
 
   return (
