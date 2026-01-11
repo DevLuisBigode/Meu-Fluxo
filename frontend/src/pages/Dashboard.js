@@ -12,6 +12,7 @@ import UpcomingTransactions from "@/components/UpcomingTransactions.js";
 import TimelineView from "@/components/TimelineView.js";
 import FilterBar from "@/components/FilterBar.js";
 import AlertsPanel from "@/components/AlertsPanel.js";
+import SearchBar from "@/components/SearchBar.js";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -24,12 +25,23 @@ const Dashboard = () => {
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [loading, setLoading] = useState(true);
   const [bulkEditMode, setBulkEditMode] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
   const [filters, setFilters] = useState({
     category: "all",
     type: "all",
     dateFrom: "",
     dateTo: "",
   });
+
+  useEffect(() => {
+    requestNotificationPermission();
+  }, []);
+
+  const requestNotificationPermission = async () => {
+    if ("Notification" in window && Notification.permission === "default") {
+      await Notification.requestPermission();
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -53,12 +65,21 @@ const Dashboard = () => {
   }, []);
 
   useEffect(() => {
-    applyFilters();
-  }, [filters, transactions]);
+    applyFiltersAndSearch();
+  }, [filters, searchTerm, transactions]);
 
-  const applyFilters = () => {
+  const applyFiltersAndSearch = () => {
     let filtered = [...transactions];
 
+    // Aplicar busca por texto
+    if (searchTerm) {
+      filtered = filtered.filter(t =>
+        t.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        t.category.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    // Aplicar filtros
     if (filters.type !== "all") {
       filtered = filtered.filter(t => t.type === filters.type);
     }
@@ -86,6 +107,14 @@ const Dashboard = () => {
       } else {
         await axios.post(`${API}/transactions`, data);
         toast.success("Transação criada com sucesso!");
+        
+        // Notificação push
+        if (Notification.permission === "granted") {
+          new Notification("Transação criada!", {
+            body: `${data.description} - R$ ${data.amount.toFixed(2)}`,
+            icon: "/logo192.png"
+          });
+        }
       }
       setModalOpen(false);
       setEditingTransaction(null);
@@ -145,6 +174,7 @@ const Dashboard = () => {
           <p className="text-muted-foreground mt-2">Visão geral das suas finanças</p>
         </div>
         <div className="flex items-center space-x-3">
+          <SearchBar onSearch={setSearchTerm} value={searchTerm} />
           <FilterBar onFilterChange={setFilters} activeFilters={filters} />
           <Button
             variant={bulkEditMode ? "default" : "outline"}
@@ -153,7 +183,7 @@ const Dashboard = () => {
             data-testid="bulk-edit-toggle"
           >
             <Edit3 className="w-4 h-4 mr-2" />
-            {bulkEditMode ? "Sair do modo edição" : "Editar em lote"}
+            {bulkEditMode ? "Sair" : "Editar em lote"}
           </Button>
           <Button
             onClick={() => {
