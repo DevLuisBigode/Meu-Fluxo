@@ -57,6 +57,7 @@ const BudgetModal = ({ open, onClose, onSave, budget }) => {
     "Saúde",
     "Educação",
     "Compras",
+    "Cartão de Crédito",
     "Outros",
   ];
 
