@@ -89,6 +89,21 @@ Acesse a aplicação em `http://localhost:3000`
 - `POST /api/tips` - Gerar dicas personalizadas
   - Body: `{"period": "week" | "month" | "year"}`
 
+### Orçamentos
+- `POST /api/budgets` - Criar orçamento
+- `GET /api/budgets` - Listar todos os orçamentos
+- `PUT /api/budgets/{id}` - Atualizar orçamento
+- `DELETE /api/budgets/{id}` - Deletar orçamento
+
+### Categorias
+- `GET /api/categories/stats` - Estatísticas por categoria com orçamentos
+
+### Comparação
+- `GET /api/stats/comparison` - Comparar mês atual vs anterior
+
+### Exportação
+- `GET /api/export/csv` - Exportar transações em CSV
+
 ### Lembretes
 - `GET /api/reminders` - Listar lembretes pendentes
 - `POST /api/send-reminder` - Enviar lembrete por e-mail
