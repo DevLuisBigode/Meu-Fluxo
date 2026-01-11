@@ -3,9 +3,9 @@ import axios from "axios";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import PeriodStats from "@/components/PeriodStats";
-import TransactionsList from "@/components/TransactionsList";
-import TransactionModal from "@/components/TransactionModal";
+import PeriodStats from "@/components/PeriodStats.js";
+import TransactionsList from "@/components/TransactionsList.js";
+import TransactionModal from "@/components/TransactionModal.js";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
