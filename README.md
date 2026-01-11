@@ -16,6 +16,17 @@ Sistema inteligente de gestão financeira pessoal com IA integrada.
 - Sistema de lembretes com notificações por e-mail
 - Categorias predefinidas: Salário, Moradia, Alimentação, Transporte, Lazer, Saúde, Educação, Compras, Outros
 
+### Categorias & Orçamentos 🆕
+- **Gráfico de Pizza**: Visualização da distribuição de gastos por categoria
+- **Orçamentos Mensais**: Defina limites de gastos para cada categoria
+- **Barras de Progresso**: Acompanhe quanto já gastou em relação ao orçamento
+- **Alertas Visuais**: Indicadores coloridos quando o limite é excedido ou está próximo
+
+### Comparação de Períodos 🆕
+- **Mês Atual vs Anterior**: Compare receitas, despesas e saldo entre períodos
+- **Indicadores de Mudança**: Visualize se houve aumento ou redução percentual
+- **Análise Resumida**: Insights automáticos sobre sua situação financeira
+
 ### Visualizações por Período
 - **Semana**: Transações da semana atual
 - **Mês**: Transações do mês atual
@@ -23,6 +34,7 @@ Sistema inteligente de gestão financeira pessoal com IA integrada.
 - Estatísticas de cada período: Total de entradas, total de saídas e saldo
 
 ### Recursos Adicionais
+- **Exportação de Dados**: Baixe todas as suas transações em formato CSV 🆕
 - Modo escuro/claro
 - Interface responsiva (desktop e mobile)
 - Design moderno com tema "Organic Flow"
