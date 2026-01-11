@@ -1,7 +1,11 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Home, Calendar, TrendingUp, Moon, Sun, Menu, X, PieChart, BarChart3 } from "lucide-react";
+import { Home, Calendar, TrendingUp, Moon, Sun, Menu, X, PieChart, BarChart3, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const API = `${BACKEND_URL}/api`;
 
 const Layout = ({ children }) => {
   const location = useLocation();
@@ -11,6 +15,11 @@ const Layout = ({ children }) => {
   const toggleDarkMode = () => {
     setDarkMode(!darkMode);
     document.documentElement.classList.toggle("dark");
+  };
+
+  const handleExport = () => {
+    window.open(`${API}/export/csv`, '_blank');
+    toast.success("Exportação iniciada!");
   };
 
   const navItems = [
