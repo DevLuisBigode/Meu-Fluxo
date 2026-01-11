@@ -323,6 +323,7 @@ async def get_period_transactions(user_id: str, start_date: datetime):
         if trans_date >= start_date:
             period_transactions.append(Transaction(**t))
     
+    period_transactions.sort(key=lambda x: datetime.fromisoformat(x.date), reverse=True)
     return period_transactions
 
 @api_router.get("/stats/week", response_model=PeriodStats)
