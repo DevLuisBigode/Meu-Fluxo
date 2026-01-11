@@ -314,6 +314,136 @@ async def get_pending_reminders():
     
     return pending
 
+@api_router.post("/budgets", response_model=Budget)
+async def create_budget(input: BudgetCreate):
+    budget_obj = Budget(**input.model_dump())
+    doc = budget_obj.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.budgets.insert_one(doc)
+    return budget_obj
+
+@api_router.get("/budgets", response_model=List[Budget])
+async def get_budgets():
+    budgets = await db.budgets.find({}, {"_id": 0}).to_list(1000)
+    for b in budgets:
+        if isinstance(b['created_at'], str):
+            b['created_at'] = datetime.fromisoformat(b['created_at'])
+    return budgets
+
+@api_router.put("/budgets/{budget_id}", response_model=Budget)
+async def update_budget(budget_id: str, limit: float):
+    existing = await db.budgets.find_one({"id": budget_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Orçamento não encontrado")
+    
+    await db.budgets.update_one({"id": budget_id}, {"$set": {"limit": limit}})
+    updated = await db.budgets.find_one({"id": budget_id}, {"_id": 0})
+    if isinstance(updated['created_at'], str):
+        updated['created_at'] = datetime.fromisoformat(updated['created_at'])
+    return updated
+
+@api_router.delete("/budgets/{budget_id}")
+async def delete_budget(budget_id: str):
+    result = await db.budgets.delete_one({"id": budget_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Orçamento não encontrado")
+    return {"message": "Orçamento deletado com sucesso"}
+
+@api_router.get("/categories/stats")
+async def get_categories_stats():
+    now = datetime.now(timezone.utc)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    
+    transactions = await db.transactions.find({}, {"_id": 0}).to_list(1000)
+    budgets = await db.budgets.find({"period": "month"}, {"_id": 0}).to_list(1000)
+    
+    budgets_map = {b['category']: b['limit'] for b in budgets}
+    
+    category_totals = {}
+    total_expenses = 0
+    
+    for t in transactions:
+        trans_date = datetime.fromisoformat(t['date']).replace(tzinfo=timezone.utc)
+        if trans_date >= month_start and t['type'] == "saida":
+            if t['category'] not in category_totals:
+                category_totals[t['category']] = 0
+            category_totals[t['category']] += t['amount']
+            total_expenses += t['amount']
+    
+    stats = []
+    for category, total in category_totals.items():
+        percentage = (total / total_expenses * 100) if total_expenses > 0 else 0
+        budget_limit = budgets_map.get(category)
+        remaining = (budget_limit - total) if budget_limit else None
+        
+        stats.append(CategoryStats(
+            category=category,
+            total=total,
+            percentage=percentage,
+            budget_limit=budget_limit,
+            remaining=remaining
+        ))
+    
+    stats.sort(key=lambda x: x.total, reverse=True)
+    return stats
+
+@api_router.get("/stats/comparison")
+async def get_period_comparison():
+    now = datetime.now(timezone.utc)
+    current_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    
+    if now.month == 1:
+        previous_month_start = current_month_start.replace(year=now.year - 1, month=12)
+    else:
+        previous_month_start = current_month_start.replace(month=now.month - 1)
+    
+    transactions = await db.transactions.find({}, {"_id": 0}).to_list(1000)
+    
+    current_transactions = []
+    previous_transactions = []
+    
+    for t in transactions:
+        if isinstance(t['created_at'], str):
+            t['created_at'] = datetime.fromisoformat(t['created_at'])
+        trans_date = datetime.fromisoformat(t['date']).replace(tzinfo=timezone.utc)
+        
+        if trans_date >= current_month_start:
+            current_transactions.append(Transaction(**t))
+        elif trans_date >= previous_month_start and trans_date < current_month_start:
+            previous_transactions.append(Transaction(**t))
+    
+    current_income = sum(t.amount for t in current_transactions if t.type == "entrada")
+    current_expense = sum(t.amount for t in current_transactions if t.type == "saida")
+    
+    previous_income = sum(t.amount for t in previous_transactions if t.type == "entrada")
+    previous_expense = sum(t.amount for t in previous_transactions if t.type == "saida")
+    
+    current_stats = PeriodStats(
+        total_income=current_income,
+        total_expense=current_expense,
+        balance=current_income - current_expense,
+        transactions=current_transactions
+    )
+    
+    previous_stats = PeriodStats(
+        total_income=previous_income,
+        total_expense=previous_expense,
+        balance=previous_income - previous_expense,
+        transactions=previous_transactions
+    )
+    
+    income_change = ((current_income - previous_income) / previous_income * 100) if previous_income > 0 else 0
+    expense_change = ((current_expense - previous_expense) / previous_expense * 100) if previous_expense > 0 else 0
+    balance_change = current_stats.balance - previous_stats.balance
+    
+    return PeriodComparison(
+        current_period=current_stats,
+        previous_period=previous_stats,
+        income_change=income_change,
+        expense_change=expense_change,
+        balance_change=balance_change
+    )
+
 app.include_router(api_router)
 
 app.add_middleware(
