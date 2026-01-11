@@ -249,11 +249,51 @@ class MeuFluxoAPITester:
 
     def test_csv_export(self):
         """Test CSV export functionality"""
-        success, response = self.run_test("CSV Export", "GET", "api/export/csv", 200)
-        if success:
-            # For CSV, response might be text, not JSON
-            print("   CSV export successful")
-        return success, response
+        url = f"{self.base_url}/api/export/csv"
+        headers = {'Content-Type': 'application/json'}
+        
+        self.tests_run += 1
+        print(f"\n🔍 Testing CSV Export...")
+        print(f"   URL: {url}")
+        
+        try:
+            response = requests.get(url, headers=headers, timeout=30)
+            success = response.status_code == 200
+            
+            if success:
+                self.tests_passed += 1
+                print(f"✅ Passed - Status: {response.status_code}")
+                
+                # Check if it's CSV content
+                content_type = response.headers.get('content-type', '')
+                if 'csv' in content_type or 'text' in content_type:
+                    csv_content = response.text
+                    lines = csv_content.split('\n')
+                    if len(lines) > 0:
+                        print(f"   CSV Headers: {lines[0]}")
+                        print(f"   Total lines: {len(lines)}")
+                        # Check for expected headers
+                        expected_headers = ["Data", "Tipo", "Categoria", "Descrição", "Valor"]
+                        if all(header in lines[0] for header in expected_headers):
+                            print("   ✅ CSV headers are correct")
+                        else:
+                            print("   ⚠️ CSV headers may be incorrect")
+                    return True, {"csv_lines": len(lines)}
+                else:
+                    print(f"   ⚠️ Unexpected content type: {content_type}")
+                    return True, {}
+            else:
+                print(f"❌ Failed - Expected 200, got {response.status_code}")
+                try:
+                    error_data = response.json()
+                    print(f"   Error: {error_data}")
+                except:
+                    print(f"   Error: {response.text}")
+                return False, {}
+                
+        except Exception as e:
+            print(f"❌ Failed - Error: {str(e)}")
+            return False, {}
 
 def main():
     print("🚀 Starting Meu Fluxo API Tests")
