@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Home, Calendar, TrendingUp, Moon, Sun, Menu, X } from "lucide-react";
+import { Home, Calendar, TrendingUp, Moon, Sun, Menu, X, PieChart, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const Layout = ({ children }) => {
@@ -18,6 +18,8 @@ const Layout = ({ children }) => {
     { path: "/semana", label: "Semana", icon: Calendar },
     { path: "/mes", label: "Mês", icon: Calendar },
     { path: "/ano", label: "Ano", icon: TrendingUp },
+    { path: "/categorias", label: "Categorias", icon: PieChart },
+    { path: "/comparacao", label: "Comparação", icon: BarChart3 },
   ];
 
   return (
