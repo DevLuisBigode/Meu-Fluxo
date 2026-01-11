@@ -160,6 +160,28 @@ class PeriodComparison(BaseModel):
     expense_change: float
     balance_change: float
 
+class TransactionTemplate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    name: str
+    amount: float
+    type: Literal["entrada", "saida"]
+    category: str
+    description: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class TemplateCreate(BaseModel):
+    name: str
+    amount: float
+    type: Literal["entrada", "saida"]
+    category: str
+    description: str
+
+class ReorderRequest(BaseModel):
+    transaction_ids: List[str]
+
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
