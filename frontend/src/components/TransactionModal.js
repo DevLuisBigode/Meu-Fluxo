@@ -89,6 +89,7 @@ const TransactionModal = ({ open, onClose, onSave, transaction }) => {
     "Saúde",
     "Educação",
     "Compras",
+    "Cartão de Crédito",
     "Outros",
   ];
 
