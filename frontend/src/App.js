@@ -1,11 +1,11 @@
 import React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
-import Layout from "@/components/Layout";
-import Dashboard from "@/pages/Dashboard";
-import WeekView from "@/pages/WeekView";
-import MonthView from "@/pages/MonthView";
-import YearView from "@/pages/YearView";
+import Layout from "@/components/Layout.js";
+import Dashboard from "@/pages/Dashboard.js";
+import WeekView from "@/pages/WeekView.js";
+import MonthView from "@/pages/MonthView.js";
+import YearView from "@/pages/YearView.js";
 import "@/App.css";
 
 function App() {
