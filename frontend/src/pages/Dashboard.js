@@ -8,6 +8,7 @@ import TipsPanel from "@/components/TipsPanel.js";
 import TransactionsList from "@/components/TransactionsList.js";
 import TransactionModal from "@/components/TransactionModal.js";
 import PeriodChart from "@/components/PeriodChart.js";
+import UpcomingTransactions from "@/components/UpcomingTransactions.js";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -73,7 +74,9 @@ const Dashboard = () => {
     setModalOpen(true);
   };
 
-  const recentTransactions = transactions.slice(0, 5);
+  const now = new Date();
+  const currentTransactions = transactions.filter(t => new Date(t.date) <= now);
+  const recentTransactions = currentTransactions.slice(0, 5);
 
   if (loading) {
     return (
@@ -105,6 +108,8 @@ const Dashboard = () => {
         </Button>
       </div>
 
+      <UpcomingTransactions transactions={transactions} />
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
           <WeeklyBalanceCard stats={weekStats} />
@@ -114,7 +119,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <PeriodChart transactions={transactions} />
+      <PeriodChart transactions={currentTransactions} />
 
       <div className="bg-card rounded-3xl border border-border/50 p-6 shadow-sm">
         <h3 className="text-2xl font-display font-bold mb-6">Transações Recentes</h3>
