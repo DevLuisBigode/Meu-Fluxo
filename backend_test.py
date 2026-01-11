@@ -203,8 +203,39 @@ class MeuFluxoAPITester:
             print("❌ No budget to update")
             return False, {}
         
-        data = {"limit": 900.0}
-        return self.run_test("Update Budget", "PUT", f"api/budgets/{self.created_budget_id}", 200, data)
+        # The limit is passed as a query parameter, not in the body
+        url = f"{self.base_url}/api/budgets/{self.created_budget_id}?limit=900.0"
+        headers = {'Content-Type': 'application/json'}
+        
+        self.tests_run += 1
+        print(f"\n🔍 Testing Update Budget...")
+        print(f"   URL: {url}")
+        
+        try:
+            response = requests.put(url, headers=headers, timeout=30)
+            success = response.status_code == 200
+            
+            if success:
+                self.tests_passed += 1
+                print(f"✅ Passed - Status: {response.status_code}")
+                try:
+                    response_data = response.json()
+                    print(f"   Response: {response_data}")
+                    return True, response_data
+                except:
+                    return True, {}
+            else:
+                print(f"❌ Failed - Expected 200, got {response.status_code}")
+                try:
+                    error_data = response.json()
+                    print(f"   Error: {error_data}")
+                except:
+                    print(f"   Error: {response.text}")
+                return False, {}
+                
+        except Exception as e:
+            print(f"❌ Failed - Error: {str(e)}")
+            return False, {}
 
     def test_delete_budget(self):
         """Delete a budget"""
