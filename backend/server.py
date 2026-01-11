@@ -662,6 +662,58 @@ async def delete_recurring_transaction(recurring_id: str, user_id: str = Depends
         raise HTTPException(status_code=404, detail="Transação recorrente não encontrada")
     return {"message": "Recorrência cancelada com sucesso"}
 
+@api_router.post("/templates", response_model=TransactionTemplate)
+async def create_template(input: TemplateCreate, user_id: str = Depends(get_current_user)):
+    template_obj = TransactionTemplate(user_id=user_id, **input.model_dump())
+    doc = template_obj.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.templates.insert_one(doc)
+    return template_obj
+
+@api_router.get("/templates", response_model=List[TransactionTemplate])
+async def get_templates(user_id: str = Depends(get_current_user)):
+    templates = await db.templates.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
+    for t in templates:
+        if isinstance(t['created_at'], str):
+            t['created_at'] = datetime.fromisoformat(t['created_at'])
+    return templates
+
+@api_router.delete("/templates/{template_id}")
+async def delete_template(template_id: str, user_id: str = Depends(get_current_user)):
+    result = await db.templates.delete_one({"id": template_id, "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Template não encontrado")
+    return {"message": "Template deletado com sucesso"}
+
+@api_router.post("/transactions/reorder")
+async def reorder_transactions(request: ReorderRequest, user_id: str = Depends(get_current_user)):
+    for index, transaction_id in enumerate(request.transaction_ids):
+        await db.transactions.update_one(
+            {"id": transaction_id, "user_id": user_id},
+            {"$set": {"order_index": index}}
+        )
+    return {"message": "Transações reordenadas com sucesso"}
+
+@api_router.get("/search")
+async def search_transactions(q: str, user_id: str = Depends(get_current_user)):
+    transactions = await db.transactions.find(
+        {
+            "user_id": user_id,
+            "$or": [
+                {"description": {"$regex": q, "$options": "i"}},
+                {"category": {"$regex": q, "$options": "i"}}
+            ]
+        },
+        {"_id": 0}
+    ).to_list(1000)
+    
+    for t in transactions:
+        if isinstance(t['created_at'], str):
+            t['created_at'] = datetime.fromisoformat(t['created_at'])
+    
+    transactions.sort(key=lambda x: datetime.fromisoformat(x['date']), reverse=True)
+    return transactions
+
 app.include_router(api_router)
 
 app.add_middleware(
