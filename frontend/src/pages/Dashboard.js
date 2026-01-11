@@ -3,11 +3,11 @@ import axios from "axios";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import WeeklyBalanceCard from "@/components/WeeklyBalanceCard";
-import TipsPanel from "@/components/TipsPanel";
-import TransactionsList from "@/components/TransactionsList";
-import TransactionModal from "@/components/TransactionModal";
-import PeriodChart from "@/components/PeriodChart";
+import WeeklyBalanceCard from "@/components/WeeklyBalanceCard.js";
+import TipsPanel from "@/components/TipsPanel.js";
+import TransactionsList from "@/components/TransactionsList.js";
+import TransactionModal from "@/components/TransactionModal.js";
+import PeriodChart from "@/components/PeriodChart.js";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
