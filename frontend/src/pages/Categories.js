@@ -5,14 +5,10 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 import BudgetModal from "@/components/BudgetModal.js";
+import { CATEGORY_COLORS } from "@/components/TimelineView.js";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
-
-const COLORS = [
-  "#10B981", "#3B82F6", "#F59E0B", "#EF4444", "#8B5CF6",
-  "#EC4899", "#14B8A6", "#F97316", "#06B6D4", "#84CC16"
-];
 
 const Categories = () => {
   const [stats, setStats] = useState([]);
@@ -73,6 +69,7 @@ const Categories = () => {
   const chartData = stats.map((stat) => ({
     name: stat.category,
     value: stat.total,
+    color: CATEGORY_COLORS[stat.category] || "#64748B",
   }));
 
   if (loading) {
@@ -117,7 +114,7 @@ const Categories = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <div className="bg-card rounded-3xl border border-border/50 p-8 shadow-sm">
             <h3 className="text-2xl font-display font-bold mb-6">Distribuição de Gastos</h3>
-            <ResponsiveContainer width="100%" height={350}>
+            <ResponsiveContainer width="100%" height={400}>
               <PieChart>
                 <Pie
                   data={chartData}
@@ -125,23 +122,33 @@ const Categories = () => {
                   cy="50%"
                   labelLine={false}
                   label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={120}
+                  outerRadius={140}
                   fill="#8884d8"
                   dataKey="value"
+                  animationBegin={0}
+                  animationDuration={800}
                 >
                   {chartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value) => `R$ ${value.toFixed(2)}`} />
+                <Tooltip 
+                  formatter={(value) => `R$ ${value.toFixed(2)}`}
+                  contentStyle={{
+                    backgroundColor: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "12px",
+                  }}
+                />
               </PieChart>
             </ResponsiveContainer>
           </div>
 
           <div className="space-y-4">
-            {stats.map((stat, index) => {
+            {stats.map((stat) => {
               const hasExceeded = stat.budget_limit && stat.total > stat.budget_limit;
               const isNearLimit = stat.budget_limit && stat.remaining && stat.remaining < stat.budget_limit * 0.2;
+              const categoryColor = CATEGORY_COLORS[stat.category] || "#64748B";
               
               return (
                 <div
@@ -153,7 +160,7 @@ const Categories = () => {
                     <div className="flex items-center space-x-3">
                       <div
                         className="w-4 h-4 rounded-full"
-                        style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                        style={{ backgroundColor: categoryColor }}
                       />
                       <div>
                         <h4 className="font-semibold text-lg">{stat.category}</h4>
