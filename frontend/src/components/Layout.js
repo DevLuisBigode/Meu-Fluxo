@@ -1,14 +1,17 @@
 import React, { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
-import { Home, Calendar, TrendingUp, Moon, Sun, Menu, X, PieChart, BarChart3, Download } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Home, Calendar, TrendingUp, Moon, Sun, Menu, X, PieChart, BarChart3, Download, LogOut, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext.js";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
 const Layout = ({ children }) => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [darkMode, setDarkMode] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -20,6 +23,12 @@ const Layout = ({ children }) => {
   const handleExport = () => {
     window.open(`${API}/export/csv`, '_blank');
     toast.success("Exportação iniciada!");
+  };
+
+  const handleLogout = () => {
+    logout();
+    toast.success("Logout realizado com sucesso!");
+    navigate("/login");
   };
 
   const navItems = [
