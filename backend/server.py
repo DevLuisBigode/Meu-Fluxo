@@ -76,6 +76,7 @@ class Transaction(BaseModel):
     has_reminder: bool = False
     reminder_sent: bool = False
     recurring_id: Optional[str] = None
+    order_index: int = 0
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class RecurringTransaction(BaseModel):
