@@ -1,4 +1,5 @@
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -12,6 +13,8 @@ from datetime import datetime, timezone, timedelta
 import asyncio
 import resend
 from emergentintegrations.llm.chat import LlmChat, UserMessage
+import jwt
+import bcrypt
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -23,17 +26,48 @@ db = client[os.environ['DB_NAME']]
 resend.api_key = os.environ.get('RESEND_API_KEY')
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
 EMERGENT_KEY = os.environ.get('EMERGENT_LLM_KEY')
+JWT_SECRET = os.environ.get('JWT_SECRET', 'meu-fluxo-secret-key-change-in-production')
+JWT_ALGORITHM = 'HS256'
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
+security = HTTPBearer()
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+class User(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    email: EmailStr
+    name: str
+    password_hash: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class UserRegister(BaseModel):
+    email: EmailStr
+    name: str
+    password: str
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    name: str
+
+class LoginResponse(BaseModel):
+    token: str
+    user: UserResponse
 
 class Transaction(BaseModel):
     model_config = ConfigDict(extra="ignore")
     
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
     amount: float
     date: str
     type: Literal["entrada", "saida"]
@@ -41,6 +75,24 @@ class Transaction(BaseModel):
     description: str
     has_reminder: bool = False
     reminder_sent: bool = False
+    recurring_id: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class RecurringTransaction(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    amount: float
+    type: Literal["entrada", "saida"]
+    category: str
+    description: str
+    frequency: Literal["daily", "weekly", "monthly", "yearly"]
+    weekdays: Optional[List[int]] = None
+    day_of_month: Optional[int] = None
+    start_date: str
+    end_date: Optional[str] = None
+    active: bool = True
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class TransactionCreate(BaseModel):
@@ -50,6 +102,11 @@ class TransactionCreate(BaseModel):
     category: str
     description: str
     has_reminder: bool = False
+    is_recurring: bool = False
+    recurring_frequency: Optional[Literal["daily", "weekly", "monthly", "yearly"]] = None
+    recurring_weekdays: Optional[List[int]] = None
+    recurring_day_of_month: Optional[int] = None
+    recurring_end_date: Optional[str] = None
 
 class TransactionUpdate(BaseModel):
     amount: Optional[float] = None
@@ -77,6 +134,7 @@ class Budget(BaseModel):
     model_config = ConfigDict(extra="ignore")
     
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
     category: str
     limit: float
     period: Literal["month", "year"]
@@ -101,29 +159,129 @@ class PeriodComparison(BaseModel):
     expense_change: float
     balance_change: float
 
-@api_router.get("/")
-async def root():
-    return {"message": "Meu Fluxo API"}
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def verify_password(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+
+def create_token(user_id: str) -> str:
+    payload = {
+        'user_id': user_id,
+        'exp': datetime.now(timezone.utc) + timedelta(days=30)
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
+    try:
+        token = credentials.credentials
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        user_id = payload.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Token inválido")
+        return user_id
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expirado")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Token inválido")
+
+@api_router.post("/auth/register", response_model=LoginResponse)
+async def register(input: UserRegister):
+    existing = await db.users.find_one({"email": input.email}, {"_id": 0})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email já cadastrado")
+    
+    user_obj = User(
+        email=input.email,
+        name=input.name,
+        password_hash=hash_password(input.password)
+    )
+    
+    doc = user_obj.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.users.insert_one(doc)
+    
+    token = create_token(user_obj.id)
+    return LoginResponse(
+        token=token,
+        user=UserResponse(id=user_obj.id, email=user_obj.email, name=user_obj.name)
+    )
+
+@api_router.post("/auth/login", response_model=LoginResponse)
+async def login(input: UserLogin):
+    user = await db.users.find_one({"email": input.email}, {"_id": 0})
+    if not user or not verify_password(input.password, user['password_hash']):
+        raise HTTPException(status_code=401, detail="Email ou senha incorretos")
+    
+    token = create_token(user['id'])
+    return LoginResponse(
+        token=token,
+        user=UserResponse(id=user['id'], email=user['email'], name=user['name'])
+    )
+
+@api_router.get("/auth/me", response_model=UserResponse)
+async def get_me(user_id: str = Depends(get_current_user)):
+    user = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    return UserResponse(id=user['id'], email=user['email'], name=user['name'])
 
 @api_router.post("/transactions", response_model=Transaction)
-async def create_transaction(input: TransactionCreate):
-    transaction_obj = Transaction(**input.model_dump())
+async def create_transaction(input: TransactionCreate, user_id: str = Depends(get_current_user)):
+    if input.is_recurring:
+        recurring_obj = RecurringTransaction(
+            user_id=user_id,
+            amount=input.amount,
+            type=input.type,
+            category=input.category,
+            description=input.description,
+            frequency=input.recurring_frequency,
+            weekdays=input.recurring_weekdays,
+            day_of_month=input.recurring_day_of_month,
+            start_date=input.date,
+            end_date=input.recurring_end_date
+        )
+        recurring_doc = recurring_obj.model_dump()
+        recurring_doc['created_at'] = recurring_doc['created_at'].isoformat()
+        await db.recurring_transactions.insert_one(recurring_doc)
+        
+        transaction_obj = Transaction(
+            user_id=user_id,
+            amount=input.amount,
+            date=input.date,
+            type=input.type,
+            category=input.category,
+            description=f"{input.description} (Recorrente)",
+            has_reminder=input.has_reminder,
+            recurring_id=recurring_obj.id
+        )
+    else:
+        transaction_obj = Transaction(
+            user_id=user_id,
+            amount=input.amount,
+            date=input.date,
+            type=input.type,
+            category=input.category,
+            description=input.description,
+            has_reminder=input.has_reminder
+        )
+    
     doc = transaction_obj.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
     await db.transactions.insert_one(doc)
     return transaction_obj
 
 @api_router.get("/transactions", response_model=List[Transaction])
-async def get_transactions():
-    transactions = await db.transactions.find({}, {"_id": 0}).to_list(1000)
+async def get_transactions(user_id: str = Depends(get_current_user)):
+    transactions = await db.transactions.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
     for t in transactions:
         if isinstance(t['created_at'], str):
             t['created_at'] = datetime.fromisoformat(t['created_at'])
     return transactions
 
 @api_router.get("/transactions/{transaction_id}", response_model=Transaction)
-async def get_transaction(transaction_id: str):
-    transaction = await db.transactions.find_one({"id": transaction_id}, {"_id": 0})
+async def get_transaction(transaction_id: str, user_id: str = Depends(get_current_user)):
+    transaction = await db.transactions.find_one({"id": transaction_id, "user_id": user_id}, {"_id": 0})
     if not transaction:
         raise HTTPException(status_code=404, detail="Transação não encontrada")
     if isinstance(transaction['created_at'], str):
@@ -131,8 +289,8 @@ async def get_transaction(transaction_id: str):
     return transaction
 
 @api_router.put("/transactions/{transaction_id}", response_model=Transaction)
-async def update_transaction(transaction_id: str, input: TransactionUpdate):
-    existing = await db.transactions.find_one({"id": transaction_id}, {"_id": 0})
+async def update_transaction(transaction_id: str, input: TransactionUpdate, user_id: str = Depends(get_current_user)):
+    existing = await db.transactions.find_one({"id": transaction_id, "user_id": user_id}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Transação não encontrada")
     
@@ -146,98 +304,82 @@ async def update_transaction(transaction_id: str, input: TransactionUpdate):
     return updated
 
 @api_router.delete("/transactions/{transaction_id}")
-async def delete_transaction(transaction_id: str):
-    result = await db.transactions.delete_one({"id": transaction_id})
+async def delete_transaction(transaction_id: str, user_id: str = Depends(get_current_user)):
+    result = await db.transactions.delete_one({"id": transaction_id, "user_id": user_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Transação não encontrada")
     return {"message": "Transação deletada com sucesso"}
 
+async def get_period_transactions(user_id: str, start_date: datetime):
+    transactions = await db.transactions.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
+    period_transactions = []
+    
+    for t in transactions:
+        if isinstance(t['created_at'], str):
+            t['created_at'] = datetime.fromisoformat(t['created_at'])
+        trans_date = datetime.fromisoformat(t['date']).replace(tzinfo=timezone.utc)
+        if trans_date >= start_date:
+            period_transactions.append(Transaction(**t))
+    
+    return period_transactions
+
 @api_router.get("/stats/week", response_model=PeriodStats)
-async def get_week_stats():
+async def get_week_stats(user_id: str = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
     week_start = now - timedelta(days=now.weekday())
     week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
     
-    transactions = await db.transactions.find({}, {"_id": 0}).to_list(1000)
-    week_transactions = []
-    
-    for t in transactions:
-        if isinstance(t['created_at'], str):
-            t['created_at'] = datetime.fromisoformat(t['created_at'])
-        trans_date = datetime.fromisoformat(t['date']).replace(tzinfo=timezone.utc)
-        if trans_date >= week_start:
-            week_transactions.append(Transaction(**t))
-    
-    total_income = sum(t.amount for t in week_transactions if t.type == "entrada")
-    total_expense = sum(t.amount for t in week_transactions if t.type == "saida")
+    transactions = await get_period_transactions(user_id, week_start)
+    total_income = sum(t.amount for t in transactions if t.type == "entrada")
+    total_expense = sum(t.amount for t in transactions if t.type == "saida")
     
     return PeriodStats(
         total_income=total_income,
         total_expense=total_expense,
         balance=total_income - total_expense,
-        transactions=week_transactions
+        transactions=transactions
     )
 
 @api_router.get("/stats/month", response_model=PeriodStats)
-async def get_month_stats():
+async def get_month_stats(user_id: str = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     
-    transactions = await db.transactions.find({}, {"_id": 0}).to_list(1000)
-    month_transactions = []
-    
-    for t in transactions:
-        if isinstance(t['created_at'], str):
-            t['created_at'] = datetime.fromisoformat(t['created_at'])
-        trans_date = datetime.fromisoformat(t['date']).replace(tzinfo=timezone.utc)
-        if trans_date >= month_start:
-            month_transactions.append(Transaction(**t))
-    
-    total_income = sum(t.amount for t in month_transactions if t.type == "entrada")
-    total_expense = sum(t.amount for t in month_transactions if t.type == "saida")
+    transactions = await get_period_transactions(user_id, month_start)
+    total_income = sum(t.amount for t in transactions if t.type == "entrada")
+    total_expense = sum(t.amount for t in transactions if t.type == "saida")
     
     return PeriodStats(
         total_income=total_income,
         total_expense=total_expense,
         balance=total_income - total_expense,
-        transactions=month_transactions
+        transactions=transactions
     )
 
 @api_router.get("/stats/year", response_model=PeriodStats)
-async def get_year_stats():
+async def get_year_stats(user_id: str = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
     year_start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
     
-    transactions = await db.transactions.find({}, {"_id": 0}).to_list(1000)
-    year_transactions = []
-    
-    for t in transactions:
-        if isinstance(t['created_at'], str):
-            t['created_at'] = datetime.fromisoformat(t['created_at'])
-        trans_date = datetime.fromisoformat(t['date']).replace(tzinfo=timezone.utc)
-        if trans_date >= year_start:
-            year_transactions.append(Transaction(**t))
-    
-    total_income = sum(t.amount for t in year_transactions if t.type == "entrada")
-    total_expense = sum(t.amount for t in year_transactions if t.type == "saida")
+    transactions = await get_period_transactions(user_id, year_start)
+    total_income = sum(t.amount for t in transactions if t.type == "entrada")
+    total_expense = sum(t.amount for t in transactions if t.type == "saida")
     
     return PeriodStats(
         total_income=total_income,
         total_expense=total_expense,
         balance=total_income - total_expense,
-        transactions=year_transactions
+        transactions=transactions
     )
 
 @api_router.post("/tips")
-async def generate_tips(request: TipsRequest):
-    stats_endpoint = f"/stats/{request.period}"
-    
+async def generate_tips(request: TipsRequest, user_id: str = Depends(get_current_user)):
     if request.period == "week":
-        stats = await get_week_stats()
+        stats = await get_week_stats(user_id)
     elif request.period == "month":
-        stats = await get_month_stats()
+        stats = await get_month_stats(user_id)
     else:
-        stats = await get_year_stats()
+        stats = await get_year_stats(user_id)
     
     categories_expense = {}
     for t in stats.transactions:
@@ -275,7 +417,7 @@ Gere 3 dicas curtas e objetivas (máximo 2 linhas cada) para ajudar a pessoa a g
         }
 
 @api_router.post("/send-reminder")
-async def send_reminder(request: EmailRequest):
+async def send_reminder(request: EmailRequest, user_id: str = Depends(get_current_user)):
     params = {
         "from": SENDER_EMAIL,
         "to": [request.recipient_email],
@@ -295,12 +437,12 @@ async def send_reminder(request: EmailRequest):
         raise HTTPException(status_code=500, detail=f"Falha ao enviar e-mail: {str(e)}")
 
 @api_router.get("/reminders")
-async def get_pending_reminders():
+async def get_pending_reminders(user_id: str = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
     tomorrow = now + timedelta(days=1)
     
     transactions = await db.transactions.find(
-        {"has_reminder": True, "reminder_sent": False},
+        {"user_id": user_id, "has_reminder": True, "reminder_sent": False},
         {"_id": 0}
     ).to_list(1000)
     
@@ -315,24 +457,24 @@ async def get_pending_reminders():
     return pending
 
 @api_router.post("/budgets", response_model=Budget)
-async def create_budget(input: BudgetCreate):
-    budget_obj = Budget(**input.model_dump())
+async def create_budget(input: BudgetCreate, user_id: str = Depends(get_current_user)):
+    budget_obj = Budget(user_id=user_id, **input.model_dump())
     doc = budget_obj.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
     await db.budgets.insert_one(doc)
     return budget_obj
 
 @api_router.get("/budgets", response_model=List[Budget])
-async def get_budgets():
-    budgets = await db.budgets.find({}, {"_id": 0}).to_list(1000)
+async def get_budgets(user_id: str = Depends(get_current_user)):
+    budgets = await db.budgets.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
     for b in budgets:
         if isinstance(b['created_at'], str):
             b['created_at'] = datetime.fromisoformat(b['created_at'])
     return budgets
 
 @api_router.put("/budgets/{budget_id}", response_model=Budget)
-async def update_budget(budget_id: str, limit: float):
-    existing = await db.budgets.find_one({"id": budget_id}, {"_id": 0})
+async def update_budget(budget_id: str, limit: float, user_id: str = Depends(get_current_user)):
+    existing = await db.budgets.find_one({"id": budget_id, "user_id": user_id}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Orçamento não encontrado")
     
@@ -343,19 +485,19 @@ async def update_budget(budget_id: str, limit: float):
     return updated
 
 @api_router.delete("/budgets/{budget_id}")
-async def delete_budget(budget_id: str):
-    result = await db.budgets.delete_one({"id": budget_id})
+async def delete_budget(budget_id: str, user_id: str = Depends(get_current_user)):
+    result = await db.budgets.delete_one({"id": budget_id, "user_id": user_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Orçamento não encontrado")
     return {"message": "Orçamento deletado com sucesso"}
 
 @api_router.get("/categories/stats")
-async def get_categories_stats():
+async def get_categories_stats(user_id: str = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     
-    transactions = await db.transactions.find({}, {"_id": 0}).to_list(1000)
-    budgets = await db.budgets.find({"period": "month"}, {"_id": 0}).to_list(1000)
+    transactions = await db.transactions.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
+    budgets = await db.budgets.find({"user_id": user_id, "period": "month"}, {"_id": 0}).to_list(1000)
     
     budgets_map = {b['category']: b['limit'] for b in budgets}
     
@@ -388,7 +530,7 @@ async def get_categories_stats():
     return stats
 
 @api_router.get("/stats/comparison")
-async def get_period_comparison():
+async def get_period_comparison(user_id: str = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
     current_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     
@@ -397,7 +539,7 @@ async def get_period_comparison():
     else:
         previous_month_start = current_month_start.replace(month=now.month - 1)
     
-    transactions = await db.transactions.find({}, {"_id": 0}).to_list(1000)
+    transactions = await db.transactions.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
     
     current_transactions = []
     previous_transactions = []
@@ -445,12 +587,12 @@ async def get_period_comparison():
     )
 
 @api_router.get("/export/csv")
-async def export_transactions_csv():
+async def export_transactions_csv(user_id: str = Depends(get_current_user)):
     from fastapi.responses import StreamingResponse
     import io
     import csv
     
-    transactions = await db.transactions.find({}, {"_id": 0}).to_list(1000)
+    transactions = await db.transactions.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
     
     output = io.StringIO()
     writer = csv.writer(output)
@@ -475,6 +617,24 @@ async def export_transactions_csv():
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=transacoes.csv"}
     )
+
+@api_router.get("/recurring")
+async def get_recurring_transactions(user_id: str = Depends(get_current_user)):
+    recurring = await db.recurring_transactions.find({"user_id": user_id, "active": True}, {"_id": 0}).to_list(1000)
+    for r in recurring:
+        if isinstance(r['created_at'], str):
+            r['created_at'] = datetime.fromisoformat(r['created_at'])
+    return recurring
+
+@api_router.delete("/recurring/{recurring_id}")
+async def delete_recurring_transaction(recurring_id: str, user_id: str = Depends(get_current_user)):
+    result = await db.recurring_transactions.update_one(
+        {"id": recurring_id, "user_id": user_id},
+        {"$set": {"active": False}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Transação recorrente não encontrada")
+    return {"message": "Recorrência cancelada com sucesso"}
 
 app.include_router(api_router)
 
