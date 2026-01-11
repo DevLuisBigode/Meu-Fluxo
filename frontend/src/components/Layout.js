@@ -78,6 +78,13 @@ const Layout = ({ children }) => {
             </div>
 
             <div className="flex items-center space-x-2">
+              {user && (
+                <div className="hidden md:flex items-center space-x-2 px-3 py-1.5 rounded-full bg-accent/10">
+                  <User className="w-4 h-4 text-accent" />
+                  <span className="text-sm font-medium">{user.name}</span>
+                </div>
+              )}
+              
               <Button
                 variant="ghost"
                 size="icon"
@@ -101,6 +108,17 @@ const Layout = ({ children }) => {
                 ) : (
                   <Moon className="w-5 h-5" />
                 )}
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleLogout}
+                className="rounded-full text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
+                data-testid="logout-button"
+                title="Sair"
+              >
+                <LogOut className="w-5 h-5" />
               </Button>
 
               <Button
