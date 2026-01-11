@@ -1,5 +1,6 @@
 import React from "react";
 import { TrendingUp, TrendingDown, Clock } from "lucide-react";
+import { CATEGORY_COLORS } from "@/components/TimelineView.js";
 
 const UpcomingTransactions = ({ transactions }) => {
   if (!transactions || transactions.length === 0) {
@@ -48,25 +49,43 @@ const UpcomingTransactions = ({ transactions }) => {
           </div>
           
           <div className="space-y-2">
-            {upcomingIncome.map((transaction) => (
-              <div
-                key={transaction.id}
-                className="bg-white/60 dark:bg-emerald-950/30 rounded-2xl p-3 flex items-center justify-between"
-              >
-                <div className="flex items-center space-x-3">
-                  <Clock className="w-4 h-4 text-emerald-600" />
-                  <div>
-                    <p className="font-medium text-foreground">{transaction.description}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {new Date(transaction.date).toLocaleDateString("pt-BR")}
-                    </p>
+            {upcomingIncome.map((transaction) => {
+              const categoryColor = CATEGORY_COLORS[transaction.category] || "#64748B";
+              return (
+                <div
+                  key={transaction.id}
+                  className="bg-white/60 dark:bg-emerald-950/30 rounded-2xl p-3 flex items-center justify-between"
+                >
+                  <div className="flex items-center space-x-3">
+                    <div 
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: categoryColor }}
+                    />
+                    <Clock className="w-4 h-4 text-emerald-600" />
+                    <div>
+                      <p className="font-medium text-foreground">{transaction.description}</p>
+                      <div className="flex items-center space-x-2">
+                        <span 
+                          className="text-xs px-2 py-0.5 rounded-full"
+                          style={{
+                            backgroundColor: `${categoryColor}20`,
+                            color: categoryColor,
+                          }}
+                        >
+                          {transaction.category}
+                        </span>
+                        <span className="text-sm text-muted-foreground">
+                          {new Date(transaction.date).toLocaleDateString("pt-BR")}
+                        </span>
+                      </div>
+                    </div>
                   </div>
+                  <p className="text-lg font-display font-bold text-emerald-600">
+                    +R$ {transaction.amount.toFixed(2)}
+                  </p>
                 </div>
-                <p className="text-lg font-display font-bold text-emerald-600">
-                  +R$ {transaction.amount.toFixed(2)}
-                </p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -95,25 +114,43 @@ const UpcomingTransactions = ({ transactions }) => {
           </div>
           
           <div className="space-y-2">
-            {upcomingExpense.map((transaction) => (
-              <div
-                key={transaction.id}
-                className="bg-white/60 dark:bg-rose-950/30 rounded-2xl p-3 flex items-center justify-between"
-              >
-                <div className="flex items-center space-x-3">
-                  <Clock className="w-4 h-4 text-rose-600" />
-                  <div>
-                    <p className="font-medium text-foreground">{transaction.description}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {new Date(transaction.date).toLocaleDateString("pt-BR")}
-                    </p>
+            {upcomingExpense.map((transaction) => {
+              const categoryColor = CATEGORY_COLORS[transaction.category] || "#64748B";
+              return (
+                <div
+                  key={transaction.id}
+                  className="bg-white/60 dark:bg-rose-950/30 rounded-2xl p-3 flex items-center justify-between"
+                >
+                  <div className="flex items-center space-x-3">
+                    <div 
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: categoryColor }}
+                    />
+                    <Clock className="w-4 h-4 text-rose-600" />
+                    <div>
+                      <p className="font-medium text-foreground">{transaction.description}</p>
+                      <div className="flex items-center space-x-2">
+                        <span 
+                          className="text-xs px-2 py-0.5 rounded-full"
+                          style={{
+                            backgroundColor: `${categoryColor}20`,
+                            color: categoryColor,
+                          }}
+                        >
+                          {transaction.category}
+                        </span>
+                        <span className="text-sm text-muted-foreground">
+                          {new Date(transaction.date).toLocaleDateString("pt-BR")}
+                        </span>
+                      </div>
+                    </div>
                   </div>
+                  <p className="text-lg font-display font-bold text-rose-600">
+                    -R$ {transaction.amount.toFixed(2)}
+                  </p>
                 </div>
-                <p className="text-lg font-display font-bold text-rose-600">
-                  -R$ {transaction.amount.toFixed(2)}
-                </p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
