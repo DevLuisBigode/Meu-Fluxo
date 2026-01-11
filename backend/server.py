@@ -444,6 +444,38 @@ async def get_period_comparison():
         balance_change=balance_change
     )
 
+@api_router.get("/export/csv")
+async def export_transactions_csv():
+    from fastapi.responses import StreamingResponse
+    import io
+    import csv
+    
+    transactions = await db.transactions.find({}, {"_id": 0}).to_list(1000)
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    writer.writerow(["Data", "Tipo", "Categoria", "Descrição", "Valor"])
+    
+    for t in transactions:
+        date_str = datetime.fromisoformat(t['date']).strftime("%d/%m/%Y")
+        tipo = "Entrada" if t['type'] == "entrada" else "Saída"
+        writer.writerow([
+            date_str,
+            tipo,
+            t['category'],
+            t['description'],
+            f"R$ {t['amount']:.2f}"
+        ])
+    
+    output.seek(0)
+    
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=transacoes.csv"}
+    )
+
 app.include_router(api_router)
 
 app.add_middleware(
