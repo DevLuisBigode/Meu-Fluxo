@@ -73,6 +73,34 @@ class EmailRequest(BaseModel):
     subject: str
     html_content: str
 
+class Budget(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    category: str
+    limit: float
+    period: Literal["month", "year"]
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class BudgetCreate(BaseModel):
+    category: str
+    limit: float
+    period: Literal["month", "year"] = "month"
+
+class CategoryStats(BaseModel):
+    category: str
+    total: float
+    percentage: float
+    budget_limit: Optional[float] = None
+    remaining: Optional[float] = None
+
+class PeriodComparison(BaseModel):
+    current_period: PeriodStats
+    previous_period: PeriodStats
+    income_change: float
+    expense_change: float
+    balance_change: float
+
 @api_router.get("/")
 async def root():
     return {"message": "Meu Fluxo API"}
