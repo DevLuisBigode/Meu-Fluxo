@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import PeriodStats from "@/components/PeriodStats.js";
 import TransactionsList from "@/components/TransactionsList.js";
 import TransactionModal from "@/components/TransactionModal.js";
+import UpcomingTransactions from "@/components/UpcomingTransactions.js";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -74,6 +75,13 @@ const WeekView = () => {
     );
   }
 
+  const now = new Date();
+  const currentTransactions = stats?.transactions.filter(t => new Date(t.date) <= now) || [];
+  const currentStats = {
+    ...stats,
+    transactions: currentTransactions
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex justify-between items-center">
@@ -94,12 +102,14 @@ const WeekView = () => {
         </Button>
       </div>
 
-      {stats && <PeriodStats stats={stats} />}
+      <UpcomingTransactions transactions={stats?.transactions || []} />
+
+      {stats && <PeriodStats stats={currentStats} />}
 
       <div className="bg-card rounded-3xl border border-border/50 p-6 shadow-sm">
         <h3 className="text-2xl font-display font-bold mb-6">Todas as Transações</h3>
         <TransactionsList
-          transactions={stats?.transactions || []}
+          transactions={currentTransactions}
           onEdit={handleEditTransaction}
           onDelete={handleDeleteTransaction}
         />
