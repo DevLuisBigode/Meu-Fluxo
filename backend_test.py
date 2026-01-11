@@ -274,6 +274,14 @@ def main():
         tester.test_year_stats,
         tester.test_generate_tips,
         tester.test_get_reminders,
+        # New budget functionality tests
+        tester.test_create_budget,
+        tester.test_get_budgets,
+        tester.test_update_budget,
+        tester.test_categories_stats,
+        tester.test_period_comparison,
+        tester.test_csv_export,
+        tester.test_delete_budget,
         tester.test_delete_transaction,
     ]
     
