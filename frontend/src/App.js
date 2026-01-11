@@ -6,6 +6,8 @@ import Dashboard from "@/pages/Dashboard.js";
 import WeekView from "@/pages/WeekView.js";
 import MonthView from "@/pages/MonthView.js";
 import YearView from "@/pages/YearView.js";
+import Categories from "@/pages/Categories.js";
+import Comparison from "@/pages/Comparison.js";
 import "@/App.css";
 
 function App() {
@@ -18,6 +20,8 @@ function App() {
             <Route path="/semana" element={<WeekView />} />
             <Route path="/mes" element={<MonthView />} />
             <Route path="/ano" element={<YearView />} />
+            <Route path="/categorias" element={<Categories />} />
+            <Route path="/comparacao" element={<Comparison />} />
           </Routes>
         </Layout>
       </BrowserRouter>
