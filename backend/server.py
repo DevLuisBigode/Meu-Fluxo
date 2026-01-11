@@ -277,6 +277,8 @@ async def get_transactions(user_id: str = Depends(get_current_user)):
     for t in transactions:
         if isinstance(t['created_at'], str):
             t['created_at'] = datetime.fromisoformat(t['created_at'])
+    
+    transactions.sort(key=lambda x: datetime.fromisoformat(x['date']), reverse=True)
     return transactions
 
 @api_router.get("/transactions/{transaction_id}", response_model=Transaction)
