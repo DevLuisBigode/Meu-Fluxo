@@ -180,6 +180,80 @@ class MeuFluxoAPITester:
         """Test get pending reminders"""
         return self.run_test("Get Pending Reminders", "GET", "api/reminders", 200)
 
+    def test_create_budget(self):
+        """Create a budget for Alimentação category"""
+        data = {
+            "category": "Alimentação",
+            "limit": 800.0,
+            "period": "month"
+        }
+        success, response = self.run_test("Create Budget", "POST", "api/budgets", 200, data)
+        if success and 'id' in response:
+            self.created_budget_id = response['id']
+        return success, response
+
+    def test_get_budgets(self):
+        """Get all budgets"""
+        return self.run_test("Get All Budgets", "GET", "api/budgets", 200)
+
+    def test_update_budget(self):
+        """Update a budget limit"""
+        if not hasattr(self, 'created_budget_id'):
+            print("❌ No budget to update")
+            return False, {}
+        
+        data = {"limit": 900.0}
+        return self.run_test("Update Budget", "PUT", f"api/budgets/{self.created_budget_id}", 200, data)
+
+    def test_delete_budget(self):
+        """Delete a budget"""
+        if not hasattr(self, 'created_budget_id'):
+            print("❌ No budget to delete")
+            return False, {}
+        
+        return self.run_test("Delete Budget", "DELETE", f"api/budgets/{self.created_budget_id}", 200)
+
+    def test_categories_stats(self):
+        """Test categories statistics with budgets"""
+        success, response = self.run_test("Categories Statistics", "GET", "api/categories/stats", 200)
+        if success:
+            if isinstance(response, list):
+                print(f"   Found {len(response)} categories with expenses")
+                for category in response[:3]:  # Show first 3
+                    print(f"   - {category.get('category', 'Unknown')}: R$ {category.get('total', 0):.2f} ({category.get('percentage', 0):.1f}%)")
+                    if category.get('budget_limit'):
+                        print(f"     Budget: R$ {category['budget_limit']:.2f}, Remaining: R$ {category.get('remaining', 0):.2f}")
+            else:
+                print("❌ Expected list response for categories stats")
+                return False, response
+        return success, response
+
+    def test_period_comparison(self):
+        """Test period comparison (current vs previous month)"""
+        success, response = self.run_test("Period Comparison", "GET", "api/stats/comparison", 200)
+        if success:
+            # Validate response structure
+            required_fields = ['current_period', 'previous_period', 'income_change', 'expense_change', 'balance_change']
+            for field in required_fields:
+                if field not in response:
+                    print(f"❌ Missing field in comparison response: {field}")
+                    return False, response
+            
+            current = response['current_period']
+            previous = response['previous_period']
+            print(f"   Current Month - Income: R$ {current['total_income']:.2f}, Expense: R$ {current['total_expense']:.2f}")
+            print(f"   Previous Month - Income: R$ {previous['total_income']:.2f}, Expense: R$ {previous['total_expense']:.2f}")
+            print(f"   Changes - Income: {response['income_change']:.1f}%, Expense: {response['expense_change']:.1f}%")
+        return success, response
+
+    def test_csv_export(self):
+        """Test CSV export functionality"""
+        success, response = self.run_test("CSV Export", "GET", "api/export/csv", 200)
+        if success:
+            # For CSV, response might be text, not JSON
+            print("   CSV export successful")
+        return success, response
+
 def main():
     print("🚀 Starting Meu Fluxo API Tests")
     print("=" * 50)
